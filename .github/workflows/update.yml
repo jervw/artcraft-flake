@@ -41,7 +41,7 @@ jobs:
       apps: ${{ steps.apps.outputs.apps }}
       shared-changed: ${{ steps.shared.outputs.changed }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
       - id: shared
         run: |
@@ -63,7 +63,7 @@ jobs:
             scripts/update.py --check > apps.txt
           fi
           echo "apps=$(jq -Rnc '[inputs]' < apps.txt)" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: shared
           path: shared/
@@ -78,8 +78,8 @@ jobs:
       matrix:
         app: ${{ fromJSON(needs.plan.outputs.apps) }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: shared
           path: shared/
@@ -110,23 +110,23 @@ jobs:
       - name: Build
         if: steps.bump.outputs.build == 'true'
         run: nix build -L --no-link .#${{ matrix.app }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app-${{ matrix.app }}
           path: out/
 
   commit:
     needs: [plan, app]
-    if: always() && needs.plan.result == 'success' && needs.plan.outputs.apps != '[]'
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.apps != '[]' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: app-*
           path: out/
           merge-multiple: true
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: shared
           path: shared/
