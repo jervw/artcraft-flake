@@ -15,8 +15,8 @@ jobs:
       - run: nix flake check --no-build
       - id: apps
         run: |
-          echo "apps=$(ls pkgs/sources/*.json | xargs -n1 basename -s .json \
-            | grep -vx craft-fonts | jq -Rnc '[inputs]')" >> "$GITHUB_OUTPUT"
+          echo "apps=$(basename -s .json pkgs/sources/*.json | grep -vx craft-fonts \
+            | jq -Rnc '[inputs]')" >> "$GITHUB_OUTPUT"
 
   build:
     needs: eval

@@ -74,12 +74,14 @@ Nix code never needs editing for a release.
   `0-unstable-YYYY-MM-DD`. The apps embed these fonts at build time through
   `CRAFT_FONTS_DIR`, so a fonts bump rebuilds every app.
 
-`.github/workflows/update.yml` runs every 6 hours (upstream often releases
+`.github/workflows/update.yml` runs every 12 hours (upstream often releases
 several times a day):
 
 1. Bump `craft-fonts`. On Mondays, or when started manually with
    *update-nixpkgs*, it also bumps nixpkgs in `flake.lock`.
-2. One job per app: bump it and build it.
+2. One job per app that has a new release (`scripts/update.py --check`): bump
+   it and build it. A craft-fonts or nixpkgs bump rebuilds every app. When
+   nothing changed, the run ends after the first job.
 3. Commit only the bumps that built. A broken upstream release stays at the
    last good version and doesn't hold back the other apps. The craft-fonts and
    nixpkgs bumps are committed only if every app built against them.

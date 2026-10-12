@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bump pkgs/sources/<name>.json to the latest upstream release.
 
-Usage: scripts/update.py [--force] [NAME ...]
+Usage: scripts/update.py [--force] [--check] [NAME ...]
 
 With no NAME, updates craft-fonts and every app. Apps track their newest
 `vX.Y.Z` tag; craft-fonts has no tags and tracks the default branch. For each
@@ -9,6 +9,9 @@ bump the source hash comes from `nix flake prefetch` and the cargoHash from
 building only the app's `cargoDeps` with a fake hash. Prints one
 `name: old -> new` line per bump, and exits non-zero if any update failed (a
 failed update leaves that name's JSON untouched).
+
+With --check, only prints the names of apps that have a newer release, without
+prefetching or writing anything (craft-fonts is skipped).
 """
 
 import json
@@ -80,11 +83,19 @@ def update_fonts(path, old, force):
     return f"{old.get('rev', '?')[:8]} -> {rev[:8]}"
 
 
-def update_app(name, path, old, force):
+def outdated(name, old):
+    """The newest release tag if it differs from `old`, else None."""
     tag = latest_tag(name)
-    version = tag.removeprefix("v")
-    if version == old.get("version") and old.get("cargoHash") and not force:
+    if tag.removeprefix("v") == old.get("version") and old.get("cargoHash"):
         return None
+    return tag
+
+
+def update_app(name, path, old, force):
+    tag = outdated(name, old) or (force and latest_tag(name))
+    if not tag:
+        return None
+    version = tag.removeprefix("v")
     hash_, date = prefetch(name, tag)
     new = {"version": version, "date": date, "hash": hash_, "cargoHash": ""}
     write(path, new)
@@ -95,9 +106,16 @@ def update_app(name, path, old, force):
 
 def main(argv):
     force = "--force" in argv
+    check = "--check" in argv
     names = [a for a in argv if not a.startswith("--")]
     if not names:
         names = ["craft-fonts"] + sorted(p.stem for p in SOURCES.glob("*.json") if p.stem != "craft-fonts")
+
+    if check:
+        for name in names:
+            if name != "craft-fonts" and outdated(name, json.loads((SOURCES / f"{name}.json").read_text())):
+                print(name, flush=True)
+        return 0
 
     failed = False
     for name in names:

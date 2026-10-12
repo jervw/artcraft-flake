@@ -1,14 +1,15 @@
 name: update
 
-# Upstream tags several releases a day. Each run bumps every app to its newest
-# vX.Y.Z tag, builds it, and commits only the bumps that built. A broken
+# Upstream tags several releases a day. Each run finds the apps with a newer
+# vX.Y.Z tag, bumps and builds only those, and commits only the bumps that built.
+# A run with nothing to update is a single short job. A broken
 # upstream release stays at the last good version without blocking the others.
 # craft-fonts and nixpkgs (flake.lock) are shared by all apps, so they are only
 # committed when every app built against them.
 
 on:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 5,17 * * *"
   workflow_dispatch:
     inputs:
       update-nixpkgs:
@@ -32,21 +33,26 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: cachix/install-nix-action@v31
-      - id: apps
-        run: |
-          echo "apps=$(ls pkgs/sources/*.json | xargs -n1 basename -s .json \
-            | grep -vx craft-fonts | jq -Rnc '[inputs]')" >> "$GITHUB_OUTPUT"
       - id: shared
         run: |
-          # nixpkgs moves weekly (Mondays' first run) or on request.
+          # nixpkgs moves weekly (Mondays' morning run) or on request.
           if [ "${{ inputs.update-nixpkgs }}" = true ] || \
-             { [ "$(date -u +%u)" = 1 ] && [ "$(date -u +%H)" -lt 6 ]; }; then
+             { [ "$(date -u +%u)" = 1 ] && [ "$(date -u +%H)" -lt 12 ]; }; then
             nix flake update nixpkgs
           fi
           scripts/update.py craft-fonts | tee changes.txt
           if git diff --quiet; then echo changed=false; else echo changed=true; fi >> "$GITHUB_OUTPUT"
           git diff --name-only flake.lock | grep -q . && echo "flake.lock: nixpkgs updated" >> changes.txt || true
           mkdir -p shared && cp flake.lock pkgs/sources/craft-fonts.json changes.txt shared/
+      - id: apps
+        run: |
+          # A craft-fonts or nixpkgs bump must be built against every app.
+          if [ "${{ steps.shared.outputs.changed }}" = true ]; then
+            basename -s .json pkgs/sources/*.json | grep -vx craft-fonts > apps.txt
+          else
+            scripts/update.py --check > apps.txt
+          fi
+          echo "apps=$(jq -Rnc '[inputs]' < apps.txt)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: shared
@@ -54,6 +60,7 @@ jobs:
 
   app:
     needs: plan
+    if: needs.plan.outputs.apps != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     strategy:
@@ -96,7 +103,7 @@ jobs:
 
   commit:
     needs: [plan, app]
-    if: always() && needs.plan.result == 'success'
+    if: always() && needs.plan.result == 'success' && needs.plan.outputs.apps != '[]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
