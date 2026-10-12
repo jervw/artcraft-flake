@@ -1,11 +1,9 @@
-{ pkgs }:
-
-let
+{pkgs}: let
   inherit (pkgs) lib;
 
-  craft-fonts = pkgs.callPackage ./craft-fonts.nix { };
+  craft-fonts = pkgs.callPackage ./craft-fonts.nix {};
 
-  mkApp = name: args: pkgs.callPackage ./mk-craft-app.nix ({ inherit name craft-fonts; } // args);
+  mkApp = name: args: pkgs.callPackage ./mk-craft-app.nix ({inherit name craft-fonts;} // args);
 
   # Per-app differences. Cargo features mirror upstream's
   # packaging/linux/package.sh so builds match the official releases.
@@ -13,7 +11,7 @@ let
     photocraft = {
       displayName = "PhotoCraft";
       description = "Native, open-source image editor with layered PSD/PSB support";
-      cargoFeatures = [ "heif" ];
+      cargoFeatures = ["heif"];
     };
     vectorcraft = {
       displayName = "VectorCraft";
@@ -22,7 +20,7 @@ let
     filmcraft = {
       displayName = "FilmCraft";
       description = "Native, open-source nonlinear video editor";
-      extraBuildInputs = [ pkgs.alsa-lib ];
+      extraBuildInputs = [pkgs.alsa-lib];
     };
     lightcraft = {
       displayName = "LightCraft";
@@ -39,7 +37,7 @@ let
     effectcraft = {
       displayName = "EffectCraft";
       description = "Native, open-source motion graphics and compositing tool";
-      extraBuildInputs = [ pkgs.alsa-lib ];
+      extraBuildInputs = [pkgs.alsa-lib];
     };
     designcraft = {
       displayName = "DesignCraft";
@@ -52,12 +50,12 @@ let
     soundcraft = {
       displayName = "SoundCraft";
       description = "Native, open-source digital audio workstation";
-      extraBuildInputs = [ pkgs.alsa-lib ];
+      extraBuildInputs = [pkgs.alsa-lib];
     };
     deckcraft = {
       displayName = "DeckCraft";
       description = "Native, open-source presentation and slide show editor";
-      extraBuildInputs = [ pkgs.alsa-lib ];
+      extraBuildInputs = [pkgs.alsa-lib];
     };
     cadcraft = {
       displayName = "CADCraft";
@@ -71,17 +69,17 @@ let
 
   appPackages = lib.mapAttrs mkApp apps;
 in
-appPackages
-// {
-  inherit craft-fonts;
+  appPackages
+  // {
+    inherit craft-fonts;
 
-  craft-suite = pkgs.symlinkJoin {
-    name = "craft-suite";
-    paths = lib.attrValues appPackages;
-    meta = {
-      description = "All twelve ArtCraft Crafting Apps";
-      homepage = "https://getartcraft.com/apps";
-      platforms = lib.platforms.linux;
+    craft-suite = pkgs.symlinkJoin {
+      name = "craft-suite";
+      paths = lib.attrValues appPackages;
+      meta = {
+        description = "All twelve ArtCraft Crafting Apps";
+        homepage = "https://getartcraft.com/apps";
+        platforms = lib.platforms.linux;
+      };
     };
-  };
-}
+  }
