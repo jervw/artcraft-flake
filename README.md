@@ -30,14 +30,14 @@ desktop entry, MIME types, AppStream metainfo and icons. Linux only
 Try one without installing:
 
 ```sh
-nix run github:<owner>/artcraft-flake#photocraft
+nix run github:jervw/artcraft-flake#photocraft
 ```
 
 NixOS or Home Manager, through the overlay:
 
 ```nix
 {
-  inputs.artcraft.url = "github:<owner>/artcraft-flake";
+  inputs.artcraft.url = "github:jervw/artcraft-flake";
   # Optional: build against your own nixpkgs instead of this flake's pin.
   # inputs.artcraft.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -86,7 +86,12 @@ several times a day):
    last good version and doesn't hold back the other apps. The craft-fonts and
    nixpkgs bumps are committed only if every app built against them.
 
-`.github/workflows/ci.yml` builds every app on pull requests.
+`.github/workflows/ci.yml` checks formatting (`nix fmt -- --check .`, alejandra)
+and builds every app on pull requests. Run `nix fmt` to format.
+
+GitHub pauses scheduled workflows in public repositories after 60 days without
+repository activity. The update bot's own commits count as activity, but if
+upstream goes quiet for that long, re-enable the workflow in the Actions tab.
 
 To push builds to a [Cachix](https://cachix.org) cache, set the repository
 variable `CACHIX_CACHE` to the cache name and the secret `CACHIX_AUTH_TOKEN`.
@@ -112,3 +117,9 @@ To add a new app that follows the same upstream layout, add it to `apps` in
 - Based on the nixpkgs PRs by @Cleboost
   ([#571418](https://github.com/NixOS/nixpkgs/pull/571418) and siblings,
   [#572622](https://github.com/NixOS/nixpkgs/pull/572622) for craft-fonts).
+
+## License
+
+The Nix packaging in this repository is licensed under the [MIT License](LICENSE).
+The packaged applications keep their upstream licenses: MIT OR Apache-2.0 for
+the apps, and SIL OFL 1.1 for the embedded craft-fonts.
