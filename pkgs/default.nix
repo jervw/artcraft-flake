@@ -33,6 +33,21 @@
     pdfcraft = {
       displayName = "PdfCraft";
       description = "Native, open-source PDF workbench: read, organize, combine, split and secure";
+      # rten-gemm's AVX512-VNNI path calls `_mm512_dpbusd_epi32`, whose LLVM
+      # intrinsic signature doesn't match nixpkgs' LLVM ("intrinsic signature
+      # mismatch for llvm.x86.avx512.vpdpbusd.512"). Drop that dispatch so it
+      # falls back to the AVX2/AVX512 kernels (same fix as nixpkgs PR #571437).
+      # The glob makes this a no-op if the crate goes away.
+      extraAttrs.postPatch = ''
+        for f in "$cargoDepsCopy"/*/rten-gemm-*/src/i8dot.rs; do
+          [ -f "$f" ] || continue
+          sed -i '/Avx512VnniIsa::new()/,+2d' "$f"
+          if grep -q 'Avx512VnniIsa::new()' "$f"; then
+            echo "rten-gemm patch did not apply to $f" >&2
+            exit 1
+          fi
+        done
+      '';
     };
     effectcraft = {
       displayName = "EffectCraft";
