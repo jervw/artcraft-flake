@@ -100,7 +100,8 @@ several times a day):
    *update-nixpkgs*, it also bumps nixpkgs in `flake.lock`.
 2. One job per app that has a new release (`scripts/update.py --check`): bump
    it and build it. A craft-fonts or nixpkgs bump rebuilds every app. When
-   nothing changed, the run ends after the first job.
+   nothing changed, the run ends after the first job. A manual run with
+   *rebuild-all* builds every app anyway, e.g. to fill the cache.
 3. Commit only the bumps that built. A broken upstream release stays at the
    last good version and doesn't hold back the other apps. The craft-fonts and
    nixpkgs bumps are committed only if every app built against them.

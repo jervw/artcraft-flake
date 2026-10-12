@@ -102,6 +102,10 @@ scripts/update.py         bumps sources/*.json
 3. `commit`: commits the JSONs that built. It commits the nixpkgs/fonts bump only
    if every app job succeeded. Then it pushes to `main` as `github-actions[bot]`.
 
+Manual runs can set `rebuild-all` to build every app without a new release, e.g.
+to fill an empty cache. `update-nixpkgs` alone doesn't do that if nixos-unstable
+hasn't moved.
+
 Gotchas:
 
 - `run:` steps without `shell: bash` don't use `pipefail`, so

@@ -16,6 +16,10 @@ on:
         description: "Also update nixpkgs in flake.lock"
         type: boolean
         default: false
+      rebuild-all:
+        description: "Build every app even without a new release (e.g. to fill the cache)"
+        type: boolean
+        default: false
 
 concurrency:
   group: update
@@ -53,7 +57,7 @@ jobs:
       - id: apps
         run: |
           # A craft-fonts or nixpkgs bump must be built against every app.
-          if [ "${{ steps.shared.outputs.changed }}" = true ]; then
+          if [ "${{ steps.shared.outputs.changed }}" = true ] || [ "${{ inputs.rebuild-all }}" = true ]; then
             basename -s .json pkgs/sources/*.json | grep -vx craft-fonts > apps.txt
           else
             scripts/update.py --check > apps.txt
@@ -93,7 +97,8 @@ jobs:
         run: |
           mkdir -p out
           scripts/update.py ${{ matrix.app }} | tee out/changes-${{ matrix.app }}.txt
-          if [ -s out/changes-${{ matrix.app }}.txt ] || [ "${{ needs.plan.outputs.shared-changed }}" = true ]; then
+          if [ -s out/changes-${{ matrix.app }}.txt ] || [ "${{ needs.plan.outputs.shared-changed }}" = true ] \
+             || [ "${{ inputs.rebuild-all }}" = true ]; then
             echo build=true >> "$GITHUB_OUTPUT"
           fi
           cp pkgs/sources/${{ matrix.app }}.json out/
