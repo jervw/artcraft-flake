@@ -33,21 +33,42 @@ Try one without installing:
 nix run github:jervw/artcraft-flake#photocraft
 ```
 
-NixOS or Home Manager, through the overlay:
+## Binary cache
+
+CI pushes every build to the public Cachix cache
+[`artcraft`](https://artcraft.cachix.org). Without it, each app is a large Rust
+build that compiles locally (roughly 5 to 20 minutes per app on a desktop
+machine).
+
+The flake declares the cache in `nixConfig`, so `nix run`/`nix build` offers to
+use it. To trust it permanently, run `cachix use artcraft`, or on NixOS add:
+
+```nix
+nix.settings = {
+  substituters = [ "https://artcraft.cachix.org" ];
+  trusted-public-keys = [ "artcraft.cachix.org-1:DVvueuBTTIU1ZMP8eNCGTr1oYvCfBik3uGicXhM0dXs=" ];
+};
+```
+
+The cache only holds builds against this flake's own nixpkgs pin. Use
+`packages`, not the overlay, and don't set `inputs.nixpkgs.follows` for this
+flake, or the derivations change and every app compiles locally.
+
+## NixOS / Home Manager
 
 ```nix
 {
   inputs.artcraft.url = "github:jervw/artcraft-flake";
-  # Optional: build against your own nixpkgs instead of this flake's pin.
-  # inputs.artcraft.inputs.nixpkgs.follows = "nixpkgs";
 
   outputs = { nixpkgs, artcraft, ... }: {
     nixosConfigurations.host = nixpkgs.lib.nixosSystem {
       modules = [
-        { nixpkgs.overlays = [ artcraft.overlays.default ]; }
         ({ pkgs, ... }: {
-          environment.systemPackages = [ pkgs.photocraft pkgs.pdfcraft ];
-          # or every app: [ pkgs.craft-suite ]
+          environment.systemPackages = with artcraft.packages.${pkgs.stdenv.hostPlatform.system}; [
+            photocraft
+            pdfcraft
+          ];
+          # or every app: [ artcraft.packages.${pkgs.stdenv.hostPlatform.system}.craft-suite ]
         })
       ];
     };
@@ -55,10 +76,8 @@ NixOS or Home Manager, through the overlay:
 }
 ```
 
-Or reference packages directly: `artcraft.packages.${system}.photocraft`.
-
-These are large Rust builds. Without a binary cache, each app compiles locally
-(roughly 5 to 20 minutes each on a desktop machine).
+There is also `overlays.default`, which adds the apps to your `pkgs`. It builds
+them against your nixpkgs, so it misses the cache and compiles locally.
 
 ## How updating works
 
@@ -93,9 +112,9 @@ GitHub pauses scheduled workflows in public repositories after 60 days without
 repository activity. The update bot's own commits count as activity, but if
 upstream goes quiet for that long, re-enable the workflow in the Actions tab.
 
-To push builds to a [Cachix](https://cachix.org) cache, set the repository
-variable `CACHIX_CACHE` to the cache name and the secret `CACHIX_AUTH_TOKEN`.
-The workflows skip Cachix when the variable is unset.
+Both workflows push their builds to Cachix through the repository variable
+`CACHIX_CACHE` (`artcraft`) and the repository secret `CACHIX_AUTH_TOKEN`. Forks
+without them skip the push.
 
 To add a new app that follows the same upstream layout, add it to `apps` in
 `pkgs/default.nix`, create `pkgs/sources/<name>.json` containing `{}`, and run

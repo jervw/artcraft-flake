@@ -3,6 +3,13 @@
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+  # Prebuilt apps from CI. Nix asks before using these unless the caller is a
+  # trusted user or has accept-flake-config set.
+  nixConfig = {
+    extra-substituters = ["https://artcraft.cachix.org"];
+    extra-trusted-public-keys = ["artcraft.cachix.org-1:DVvueuBTTIU1ZMP8eNCGTr1oYvCfBik3uGicXhM0dXs="];
+  };
+
   outputs = {nixpkgs, ...}: let
     inherit (nixpkgs) lib;
     systems = [
