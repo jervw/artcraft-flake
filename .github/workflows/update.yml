@@ -24,6 +24,12 @@ concurrency:
 permissions:
   contents: write
 
+# Explicit `bash` runs with `-eo pipefail`, so a failing `update.py | tee` fails
+# the step instead of being masked by tee.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   plan:
     runs-on: ubuntu-latest
