@@ -75,11 +75,14 @@ jobs:
           path: shared/
       - run: cp shared/flake.lock flake.lock && cp shared/craft-fonts.json pkgs/sources/
       - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         if: vars.CACHIX_CACHE != ''
         with:
           name: ${{ vars.CACHIX_CACHE }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # Skip sources and vendored crates (~0.6-0.9 GiB per app); users only
+          # need the built apps, and the free cache is 5 GB.
+          pushFilter: "(-source|-vendor|-vendor-staging)$"
       - id: bump
         run: |
           mkdir -p out
