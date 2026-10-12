@@ -1,0 +1,128 @@
+name: update
+
+# Upstream tags several releases a day. Each run bumps every app to its newest
+# vX.Y.Z tag, builds it, and commits only the bumps that built. A broken
+# upstream release stays at the last good version without blocking the others.
+# craft-fonts and nixpkgs (flake.lock) are shared by all apps, so they are only
+# committed when every app built against them.
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      update-nixpkgs:
+        description: "Also update nixpkgs in flake.lock"
+        type: boolean
+        default: false
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.apps.outputs.apps }}
+      shared-changed: ${{ steps.shared.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+      - id: apps
+        run: |
+          echo "apps=$(ls pkgs/sources/*.json | xargs -n1 basename -s .json \
+            | grep -vx craft-fonts | jq -Rnc '[inputs]')" >> "$GITHUB_OUTPUT"
+      - id: shared
+        run: |
+          # nixpkgs moves weekly (Mondays' first run) or on request.
+          if [ "${{ inputs.update-nixpkgs }}" = true ] || \
+             { [ "$(date -u +%u)" = 1 ] && [ "$(date -u +%H)" -lt 6 ]; }; then
+            nix flake update nixpkgs
+          fi
+          scripts/update.py craft-fonts | tee changes.txt
+          if git diff --quiet; then echo changed=false; else echo changed=true; fi >> "$GITHUB_OUTPUT"
+          git diff --name-only flake.lock | grep -q . && echo "flake.lock: nixpkgs updated" >> changes.txt || true
+          mkdir -p shared && cp flake.lock pkgs/sources/craft-fonts.json changes.txt shared/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shared
+          path: shared/
+
+  app:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.plan.outputs.apps) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: shared
+          path: shared/
+      - run: cp shared/flake.lock flake.lock && cp shared/craft-fonts.json pkgs/sources/
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
+        if: vars.CACHIX_CACHE != ''
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - id: bump
+        run: |
+          mkdir -p out
+          scripts/update.py ${{ matrix.app }} | tee out/changes-${{ matrix.app }}.txt
+          if [ -s out/changes-${{ matrix.app }}.txt ] || [ "${{ needs.plan.outputs.shared-changed }}" = true ]; then
+            echo build=true >> "$GITHUB_OUTPUT"
+          fi
+          cp pkgs/sources/${{ matrix.app }}.json out/
+      - name: Free disk space
+        if: steps.bump.outputs.build == 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Build
+        if: steps.bump.outputs.build == 'true'
+        run: nix build -L --no-link .#${{ matrix.app }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.app }}
+          path: out/
+
+  commit:
+    needs: [plan, app]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: app-*
+          path: out/
+          merge-multiple: true
+      - uses: actions/download-artifact@v5
+        with:
+          name: shared
+          path: shared/
+      - name: Commit successful bumps
+        run: |
+          cp out/*.json pkgs/sources/ 2>/dev/null || true
+          cat out/changes-*.txt > changes.txt 2>/dev/null || true
+          if [ "${{ needs.app.result }}" = success ]; then
+            cp shared/flake.lock flake.lock
+            cp shared/craft-fonts.json pkgs/sources/
+            cat shared/changes.txt >> changes.txt
+          elif [ "${{ needs.plan.outputs.shared-changed }}" = true ]; then
+            echo "::warning::Not committing craft-fonts/nixpkgs bump: some app failed to build"
+          fi
+          git diff --quiet && { echo "Nothing to commit"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "update: $(cut -d: -f1 changes.txt | paste -sd, | sed 's/,/, /g')" \
+            -m "$(cat changes.txt)"
+          git push
