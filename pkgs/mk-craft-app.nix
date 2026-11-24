@@ -78,6 +78,37 @@ in
           "${envPrefix}_BUILD_DATE" = source.date;
         };
 
+        # fetchCargoVendor only vendors Cargo.lock's [[package]] entries, so a
+        # [patch] that the lockfile records as [[patch.unused]] points into a
+        # vendored git source that lacks the crate, and cargo fails with "patch
+        # location ... does not contain packages matching". Unused patches don't
+        # affect resolution, so drop them from the root manifest. Cargo.lock is left
+        # alone because cargoSetupPostPatchHook compares it against the vendor copy.
+        # This is prePatch, not postPatch, so per-app extraAttrs.postPatch can't
+        # override it.
+        prePatch = ''
+          unusedPatches=$(awk '
+            /^\[\[patch\.unused\]\]/ { u = 1; next }
+            u && /^name = / { gsub(/"/, "", $3); print $3; u = 0 }
+          ' Cargo.lock)
+          if [ -n "$unusedPatches" ]; then
+            echo "dropping unused [patch] entries: $unusedPatches"
+            awk -v names="$unusedPatches" '
+              BEGIN { split(names, a, /[ \n]+/); for (i in a) drop[a[i]] = 1 }
+              /^\[/ { inPatch = ($0 ~ /^\[patch\./) }
+              inPatch && /^[A-Za-z0-9_-]+[ \t]*=/ {
+                key = $0; sub(/[ \t]*=.*/, "", key)
+                if (key in drop) {
+                  if ($0 !~ /}/) { print "multi-line [patch] entry for " key > "/dev/stderr"; exit 1 }
+                  next
+                }
+              }
+              { print }
+            ' Cargo.toml > Cargo.toml.tmp
+            mv Cargo.toml.tmp Cargo.toml
+          fi
+        '';
+
         cargoBuildFlags =
           [
             "--package=${name}"

@@ -89,6 +89,14 @@ scripts/update.py         bumps sources/*.json
   stops matching. If another app gains `rten-gemm`, it needs the same patch.
 - `fetchCargoVendor` handles git dependencies (effectcraft has 26) with just
   `cargoHash`. No `outputHashes` needed.
+- **Unused `[patch]` entries:** upstream patches the whole egui/craft-libs family
+  in `[patch.crates-io]`, including crates the app never uses (`egui_demo_lib`,
+  `krilla`, ...). `Cargo.lock` lists those under `[[patch.unused]]`, and
+  `fetchCargoVendor` doesn't vendor them, so cargo fails with `patch location ...
+  does not contain packages matching`. From late October to late November 2026
+  this broke 10 of the 12 apps. The builder's `prePatch` removes those entries
+  from the root `Cargo.toml`. It must not touch `Cargo.lock`, because
+  `cargoSetupPostPatchHook` checks it against the vendored copy.
 - PhotoCraft has been launched on Wayland: the GPU canvas came up.
 
 ## Update automation (`.github/workflows/update.yml`)
